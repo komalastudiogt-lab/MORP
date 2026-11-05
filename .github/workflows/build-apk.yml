@@ -1,1 +1,137 @@
-m
+name: Compilar APK MORP
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar el codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '21'
+
+      - name: Preparar firma fija
+        id: firma
+        run: |
+          mkdir -p ~/.android
+          if [ -f debug.keystore ]; then
+            cp debug.keystore ~/.android/debug.keystore
+            echo "nueva=false" >> "$GITHUB_OUTPUT"
+          else
+            keytool -genkeypair -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "C=US, O=Android, CN=Android Debug" -noprompt
+            cp debug.keystore ~/.android/debug.keystore
+            echo "nueva=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Guardar firma nueva (descargala y subela al repositorio)
+        if: steps.firma.outputs.nueva == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-keystore
+          path: debug.keystore
+
+      - name: Preparar Capacitor y puente nativo
+        run: |
+          mkdir -p www/js
+          cp index.html www/
+          cp -r css www/
+          cp js/app.js www/js/
+          [ -f icon.png ] && cp icon.png www/icon.png || true
+
+          npm init -y
+          npm install @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7 @capacitor/filesystem@7 @capacitor/share@7 @capacitor/assets html2pdf.js@0.10.1 @fontsource/barlow@5 @fontsource/barlow-condensed@5 esbuild
+
+          cp node_modules/html2pdf.js/dist/html2pdf.bundle.min.js www/js/html2pdf.js
+          mkdir -p www/fonts
+          cp node_modules/@fontsource/barlow/files/barlow-latin-{400,500,600}-normal.woff2 www/fonts/ || true
+          cp node_modules/@fontsource/barlow-condensed/files/barlow-condensed-latin-{600,700}-normal.woff2 www/fonts/ || true
+
+          cat << 'EOF' > native-bridge.js
+          import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
+          import { Share } from '@capacitor/share';
+
+          window.NativeShare = async function (base64Data, filename) {
+            const r = await Filesystem.writeFile({ path: filename, data: base64Data, directory: Directory.Cache });
+            await Share.share({ title: 'Reporte de MORP', url: r.uri, dialogTitle: 'Compartir o guardar PDF' });
+          };
+
+          window.NativeSaveJSON = async function (jsonText, filename) {
+            const r = await Filesystem.writeFile({ path: filename, data: jsonText, directory: Directory.Cache, encoding: Encoding.UTF8 });
+            await Share.share({ title: 'Respaldo de MORP', url: r.uri, dialogTitle: 'Guardar o compartir respaldo' });
+          };
+          EOF
+
+          npx esbuild native-bridge.js --bundle --outfile=www/js/native-bridge.js
+
+          npx cap init "MORP" "com.morp.refers" --web-dir www
+          npx cap add android
+
+          if [ -f icon.png ]; then
+            mkdir -p assets
+            cp icon.png assets/icon.png
+            npx @capacitor/assets generate --android
+          fi
+
+          npx cap sync android
+
+      - name: Fijar firma y version del APK
+        run: |
+          python3 - << 'PY'
+          import re
+          p = 'android/app/build.gradle'
+          s = open(p).read()
+          s = re.sub(r'versionCode\s*=?\s*\d+', 'versionCode ${{ github.run_number }}', s, count=1)
+          s = re.sub(r'versionName\s*=?\s*"[^"]*"', 'versionName "1.0.${{ github.run_number }}"', s, count=1)
+          firma = '''
+              signingConfigs {
+                  debug {
+                      storeFile rootProject.file('../debug.keystore')
+                      storePassword 'android'
+                      keyAlias 'androiddebugkey'
+                      keyPassword 'android'
+                  }
+              }
+          '''
+          s = re.sub(r'(^android\s*\{)', lambda m: m.group(1) + firma, s, count=1, flags=re.M)
+          open(p, 'w').write(s)
+          PY
+          grep -q "storeFile" android/app/build.gradle || { echo "No se pudo fijar la firma"; exit 1; }
+          grep -n "versionCode\|versionName\|storeFile" android/app/build.gradle
+
+      - name: Compilar el APK con Gradle
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Guardar el APK generado
+        uses: actions/upload-artifact@v4
+        with:
+          name: MORP-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Verificar firma del APK
+        run: |
+          SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          APKSIGNER=$(ls "$SDK"/build-tools/*/apksigner | tail -1)
+          APK=android/app/build/outputs/apk/debug/app-debug.apk
+          ESPERADA=$(keytool -list -v -keystore debug.keystore -storepass android | grep "SHA256:" | head -1 | sed 's/.*SHA256: *//' | tr -d ':' | tr 'A-Z' 'a-z')
+          REAL=$("$APKSIGNER" verify --print-certs "$APK" | grep "SHA-256 digest" | head -1 | sed 's/.*: *//' | tr -d ' ' | tr 'A-Z' 'a-z')
+          echo "Huella esperada: $ESPERADA"
+          echo "Huella del APK : $REAL"
+          echo "Huella de firma del APK: $REAL" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$ESPERADA" != "$REAL" ]; then echo "::warning::LA FIRMA DEL APK NO COINCIDE CON debug.keystore"; fi
