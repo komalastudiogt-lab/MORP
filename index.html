@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es" data-tema="noche">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<title>MORP</title>
+<script>
+(function () {
+  function caja(msg) {
+    var d = document.getElementById('errcaja');
+    if (!d) {
+      d = document.createElement('div');
+      d.id = 'errcaja';
+      d.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#b00020;color:#fff;padding:10px 12px;font:13px/1.4 sans-serif;white-space:pre-wrap;word-break:break-word;';
+      (document.body || document.documentElement).appendChild(d);
+    }
+    d.textContent = msg;
+  }
+  window.addEventListener('error', function (e) {
+    caja('Error: ' + (e.message || 'desconocido') + (e.lineno ? ' (línea ' + e.lineno + ')' : ''));
+  });
+  window.addEventListener('load', function () {
+    setTimeout(function () {
+      if (!window.__appListo) {
+        caja('app.js no arrancó: el archivo puede estar dañado o incompleto');
+      }
+    }, 1000);
+  });
+})();
+</script>
+<link rel="stylesheet" href="./css/styles.css">
+<script src="./js/html2pdf.js" defer></script>
+<script src="./js/native-bridge.js" defer></script>
+<script src="./js/app.js" defer></script>
+</head>
+<body>
+<div id="app">
+  <main id="vista"></main>
+  <nav id="nav" aria-label="Secciones">
+    <button type="button" class="on" data-acc="ir" data-vista="turno">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2"/><path d="M12 7v14M8 11h8M5 14H3a9 9 0 0 0 18 0h-2"/></svg>
+      <span>Turno</span>
+    </button>
+    <button type="button" data-acc="ir" data-vista="buques">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18c2 1.5 4 1.5 6 0s4-1.5 6 0 4 1.5 6 0M5 14l1.5-6h11L19 14M12 8V3h4"/></svg>
+      <span>Buques</span>
+    </button>
+    <button type="button" data-acc="ir" data-vista="ajustes">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h8M18 6h2M4 12h2M12 12h8M4 18h10M20 18h0"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></svg>
+      <span>Ajustes</span>
+    </button>
+  </nav>
+</div>
+<div id="modal" hidden></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="pdfzona" aria-hidden="true"></div>
+<input type="file" id="archivo" accept=".json,application/json" hidden>
+</body>
+</html>
