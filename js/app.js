@@ -59,6 +59,7 @@
       id: (typeof b.id === 'string' && b.id) ? b.id : uid(),
       nombre: String(b.nombre || 'Sin nombre').slice(0, 60),
       notas: String(b.notas || '').slice(0, 300),
+      grupo: !!b.grupo,
       creado: typeof b.creado === 'number' ? b.creado : Date.now(),
       bahias: bs.map(normBahia)
     };
@@ -140,13 +141,28 @@
   }
   function quitarCeros(s) { return String(s).replace(/^0+/, ''); }
   function pad2(n) { return (n < 10 ? '0' : '') + n; }
-  function siguienteNum(n) {
+  function padN(v, largo) {
+    var t = String(v);
+    while (t.length < largo) { t = '0' + t; }
+    return t;
+  }
+  function siguienteNum(n, grupo) {
     if (/^\d+$/.test(String(n))) {
-      var s = String(parseInt(n, 10) + 1);
-      while (s.length < String(n).length) { s = '0' + s; }
-      return s;
+      return padN(parseInt(n, 10) + (grupo ? 4 : 1), String(n).length);
     }
     return '';
+  }
+  /* Con grupos de 3: la bahía 06 son los números 05, 06 y 07 (el par del medio es el principal) */
+  function miembros(x, grupo) {
+    var t = String(x.num);
+    if (grupo && /^\d+$/.test(t)) {
+      var n = parseInt(t, 10);
+      if (n >= 2 && n % 2 === 0) {
+        var largo = Math.max(t.length, 2);
+        return [padN(n - 1, largo), padN(n, largo), padN(n + 1, largo)];
+      }
+    }
+    return [t];
   }
   function cercano(el, attr) {
     while (el && el.nodeType === 1) {
@@ -173,19 +189,30 @@
     }
     return '<div class="fila"><div class="f-cab"><span class="f-etq">' + etq + '<span>' + n + ' posiciones</span></span>' + badgeEnc(v) + '</div>' + celdas(n, v) + '</div>';
   }
-  function htmlBahia(x) {
-    return '<button type="button" class="bahia" data-acc="editar-bahia" data-id="' + esc(x.id) + '">' +
-      '<div class="b-num"><span>' + esc(x.num || '?') + '</span>' + (x.anexo ? '<small>Anexo</small>' : '<small>Bahía</small>') + '</div>' +
+  function htmlBahia(x, grupo) {
+    var m = miembros(x, grupo);
+    var izq;
+    if (m.length === 3) {
+      izq = '<div class="b-num b-grupo"><small>' + esc(m[0]) + '</small><span>' + esc(m[1]) + '</span><small>' + esc(m[2]) + '</small>' + (x.anexo ? '<em>Anexo</em>' : '') + '</div>';
+    } else {
+      izq = '<div class="b-num"><span>' + esc(x.num || '?') + '</span>' + (x.anexo ? '<small>Anexo</small>' : '<small>Bahía</small>') + '</div>';
+    }
+    return '<button type="button" class="bahia" data-acc="editar-bahia" data-id="' + esc(x.id) + '">' + izq +
       '<div class="b-cuerpo">' + filaBahia('Cubierta', x.ancho_cub, x.enc_cub) + filaBahia('Bodega', x.ancho_bod, x.enc_bod) +
       (x.nota ? '<div class="b-nota">' + esc(x.nota) + '</div>' : '') + '</div></button>';
   }
-  function coincide(x, filtro) {
+  function coincide(x, filtro, grupo) {
     var f = String(filtro).replace(/^\s+|\s+$/g, '').toLowerCase();
     if (!f) { return true; }
-    var n = String(x.num).toLowerCase();
-    if (n.indexOf(f) > -1) { return true; }
+    var m = miembros(x, grupo);
     var fz = quitarCeros(f);
-    return fz !== '' && quitarCeros(n).indexOf(fz) === 0;
+    for (var i = 0; i < m.length; i++) {
+      var n = m[i].toLowerCase();
+      if (/^\d+$/.test(n)) {
+        if (fz === '' ? n.indexOf(f) === 0 : quitarCeros(n).indexOf(fz) === 0) { return true; }
+      } else if (n.indexOf(f) > -1) { return true; }
+    }
+    return false;
   }
   function htmlLista(b) {
     if (!b.bahias.length) {
@@ -193,7 +220,7 @@
     }
     var h = '';
     for (var i = 0; i < b.bahias.length; i++) {
-      if (coincide(b.bahias[i], ruta.filtro)) { h += htmlBahia(b.bahias[i]); }
+      if (coincide(b.bahias[i], ruta.filtro, b.grupo)) { h += htmlBahia(b.bahias[i], b.grupo); }
     }
     if (!h) { h = '<div class="vacio"><h2>No hay esa bahía</h2><p>Revisa el número que escribiste.</p></div>'; }
     return h;
@@ -341,7 +368,8 @@
       '<p class="ayuda" style="margin-top:6px;font-size:14px">La bodega suele tener 2 posiciones menos que la cubierta. Luego puedes cambiar cualquier bahía.</p>' +
       '<div class="campo"><div class="etq">Enchufe refer en cubierta</div>' + seg('enc-cub', OPC_ENC, '', 'seg-enc') + '</div>' +
       '<div class="campo"><div class="etq">Enchufe refer en bodega</div>' + seg('enc-bod', OPC_ENC, '', 'seg-enc') + '</div>' +
-      '<div class="campo"><div class="etq">Numeración de bahías</div>' + seg('numeracion', [['1', '1, 2, 3…'], ['2', '1, 3, 5…']], '1') + '</div>' +
+      '<div class="campo"><div class="etq">Numeración de bahías</div>' + seg('numeracion', [['g', 'Grupos de 3'], ['1', '1, 2, 3…'], ['2', '1, 3, 5…']], 'g') +
+      '<p class="ayuda">Grupos de 3: 01-02-03, 05-06-07, 09-10-11… El par del medio es el principal.</p></div>' +
       '<div class="campo"><div class="etq">¿Es el buque de este turno?</div>' + seg('turno', [['si', 'Sí'], ['no', 'No']], 'si') + '</div>' +
       '<div class="botones"><button type="button" class="btn" data-acc="cerrar">Cancelar</button><button type="button" class="btn btn-prim" data-acc="guardar-buque-nuevo">Crear buque</button></div>');
     document.getElementById('f-cub').setAttribute('data-prev', '12');
@@ -354,13 +382,13 @@
     var bod = leerNum('f-bod', 0, 30, Math.max(cub - 2, 0));
     var ec = valSeg('enc-cub');
     var eb = valSeg('enc-bod');
-    var paso = valSeg('numeracion') === '2' ? 2 : 1;
+    var modo = valSeg('numeracion');
     var bahias = [];
     for (var i = 0; i < n; i++) {
-      var v = 1 + paso * i;
-      bahias.push(normBahia({ num: v < 10 ? '0' + v : String(v), ancho_cub: cub, ancho_bod: bod, enc_cub: ec, enc_bod: eb }));
+      var v = modo === 'g' ? 2 + 4 * i : (modo === '2' ? 1 + 2 * i : 1 + i);
+      bahias.push(normBahia({ num: padN(v, 2), ancho_cub: cub, ancho_bod: bod, enc_cub: ec, enc_bod: eb }));
     }
-    var b = normBuque({ nombre: nombre, bahias: bahias });
+    var b = normBuque({ nombre: nombre, grupo: modo === 'g', bahias: bahias });
     estado.buques.push(b);
     var turno = valSeg('turno') === 'si';
     if (turno) { estado.turno = b.id; }
@@ -376,6 +404,8 @@
     abrirModal('<h2>Editar buque</h2>' +
       '<div class="campo"><label for="f-nombre">Nombre del buque</label><input id="f-nombre" type="text" maxlength="60" autocomplete="off" value="' + esc(b.nombre) + '"></div>' +
       '<div class="campo"><label for="f-notas">Nota (opcional)</label><input id="f-notas" type="text" maxlength="300" autocomplete="off" value="' + esc(b.notas) + '"></div>' +
+      '<div class="campo"><div class="etq">Mostrar cada bahía como grupo de 3 números</div>' + seg('grupo', [['si', 'Sí'], ['no', 'No']], b.grupo ? 'si' : 'no') +
+      '<p class="ayuda">Con grupos de 3, la bahía 06 se muestra como 05 · 06 · 07. Solo cambia cómo se ve: escribe en cada bahía su número par principal.</p></div>' +
       '<div class="botones"><button type="button" class="btn" data-acc="cerrar">Cancelar</button><button type="button" class="btn btn-prim" data-acc="guardar-buque-edit">Guardar</button></div>' +
       '<div class="botones"><button type="button" class="btn btn-peligro" data-acc="borrar-buque">Eliminar buque</button></div>');
   }
@@ -386,6 +416,7 @@
     if (!nombre) { toast('Escribe el nombre del buque'); return; }
     b.nombre = nombre.slice(0, 60);
     b.notas = document.getElementById('f-notas').value.slice(0, 300);
+    b.grupo = valSeg('grupo') === 'si';
     guardar();
     cerrarModal();
     render(true);
@@ -413,10 +444,11 @@
     var nueva = !x;
     if (nueva) {
       var u = b.bahias.length ? b.bahias[b.bahias.length - 1] : null;
-      x = { num: u ? siguienteNum(u.num) : '01', anexo: false, ancho_cub: u ? u.ancho_cub : 12, ancho_bod: u ? u.ancho_bod : 10, enc_cub: u ? u.enc_cub : '', enc_bod: u ? u.enc_bod : '', nota: '' };
+      x = { num: u ? siguienteNum(u.num, b.grupo) : (b.grupo ? '02' : '01'), anexo: false, ancho_cub: u ? u.ancho_cub : 12, ancho_bod: u ? u.ancho_bod : 10, enc_cub: u ? u.enc_cub : '', enc_bod: u ? u.enc_bod : '', nota: '' };
     }
-    abrirModal('<h2>' + (nueva ? 'Nueva bahía' : 'Bahía ' + esc(x.num)) + '</h2>' +
-      '<div class="campo"><label for="f-num">Número de bahía</label><input id="f-num" type="text" maxlength="10" autocomplete="off" value="' + esc(x.num) + '"></div>' +
+    abrirModal('<h2>' + (nueva ? 'Nueva bahía' : 'Bahía ' + esc(miembros(x, b.grupo).join(' · '))) + '</h2>' +
+      '<div class="campo"><label for="f-num">' + (b.grupo ? 'Número principal (el par del medio)' : 'Número de bahía') + '</label><input id="f-num" type="text" maxlength="10" autocomplete="off" value="' + esc(x.num) + '">' +
+      (b.grupo ? '<p class="ayuda">Ejemplo: escribe 06 para la bahía 05 · 06 · 07.</p>' : '') + '</div>' +
       '<div class="campo"><div class="etq">Tipo</div>' + seg('anexo', [['no', 'Bahía normal'], ['si', 'Anexo']], x.anexo ? 'si' : 'no') + '</div>' +
       '<div class="campo"><div class="etq">Cubierta: posiciones de izquierda a derecha</div>' + stepper('f-cub', x.ancho_cub, 1, 30) + '</div>' +
       '<div class="campo"><div class="etq">Enchufe refer en cubierta</div>' + seg('enc-cub', OPC_ENC, x.enc_cub, 'seg-enc') + '</div>' +
@@ -568,7 +600,7 @@
     for (var i = 0; i < b.bahias.length; i++) {
       var x = b.bahias[i];
       filas += '<tr style="page-break-inside:avoid">' +
-        '<td ' + td + '><b>' + esc(x.num) + '</b>' + (x.anexo ? ' (anexo)' : '') + '</td>' +
+        '<td ' + td + '><b>' + esc(miembros(x, b.grupo).join(' · ')) + '</b>' + (x.anexo ? ' (anexo)' : '') + '</td>' +
         '<td ' + td + '>' + x.ancho_cub + '</td><td ' + td + '><b>' + encPdf(x.enc_cub) + '</b></td>' +
         '<td ' + td + '>' + x.ancho_bod + '</td><td ' + td + '><b>' + encPdf(x.enc_bod) + '</b></td>' +
         '<td ' + td + '>' + esc(x.nota) + '</td></tr>';
