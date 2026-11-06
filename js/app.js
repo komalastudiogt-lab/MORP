@@ -118,7 +118,9 @@
     buscar: '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4-4"/>',
     cambiar: '<path d="M7 7h12l-3-3M17 17H5l3 3"/>',
     capas: '<path d="M12 3l9 5-9 5-9-5zM3 13l9 5 9-5"/>',
-    flecha: '<path d="M9 6l6 6-6 6"/>'
+    flecha: '<path d="M9 6l6 6-6 6"/>',
+    ancla: '<circle cx="12" cy="5" r="2"/><path d="M12 7v14M8 11h8M5 14H3a9 9 0 0 0 18 0h-2"/>',
+    enchufe: '<path d="M9 3v5M15 3v5M7 8h10v3a5 5 0 0 1-10 0zM12 16v5"/>'
   };
   function ic(n, clase) {
     return '<svg class="ic ' + (clase || '') + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + IC[n] + '</svg>';
@@ -187,7 +189,7 @@
     if (n < 1) {
       return '<div class="fila"><div class="f-cab"><span class="f-etq">' + etq + '</span></div><div class="sin-bodega">Sin posiciones</div></div>';
     }
-    return '<div class="fila"><div class="f-cab"><span class="f-etq">' + etq + '<span>' + n + ' posiciones</span></span>' + badgeEnc(v) + '</div>' + celdas(n, v) + '</div>';
+    return '<div class="fila"><div class="f-cab"><span class="f-etq">' + etq + '<span>' + n + '</span></span>' + badgeEnc(v) + '</div>' + celdas(n, v) + '</div>';
   }
   function htmlBahia(x, grupo) {
     var m = miembros(x, grupo);
@@ -225,6 +227,10 @@
     if (!h) { h = '<div class="vacio"><h2>No hay esa bahía</h2><p>Revisa el número que escribiste.</p></div>'; }
     return h;
   }
+  function ib(acc, icono, nombre, extra, id, vista) {
+    return '<button type="button" class="ibtn' + (extra || '') + '" data-acc="' + acc + '"' + (id ? ' data-id="' + esc(id) + '"' : '') +
+      (vista ? ' data-vista="' + vista + '"' : '') + ' aria-label="' + nombre + '" title="' + nombre + '">' + ic(icono) + '</button>';
+  }
   function htmlBuque(b, home) {
     var turno = estado.turno === b.id;
     var h = '<section class="pantalla">';
@@ -232,16 +238,16 @@
     h += '<div class="cab"><div>' + (turno ? '<div class="pill-turno">En turno</div>' : '') +
       '<h1 class="titulo">' + esc(b.nombre) + '</h1><p class="sub">' + b.bahias.length + (b.bahias.length === 1 ? ' bahía' : ' bahías') +
       (b.notas ? ' · ' + esc(b.notas) : '') + '</p></div></div>';
-    h += '<div class="fila-acc">';
+    h += '<div class="barra" role="toolbar" aria-label="Acciones">';
     if (home) {
-      h += '<button type="button" class="chip" data-acc="ir" data-vista="buques">' + ic('cambiar') + 'Cambiar buque</button>';
+      h += ib('ir', 'cambiar', 'Cambiar de buque', '', null, 'buques');
     } else {
-      h += '<button type="button" class="chip" data-acc="turno-toggle" data-id="' + esc(b.id) + '">' + ic('barco') + (turno ? 'Quitar de turno' : 'Poner en turno') + '</button>';
+      h += ib('turno-toggle', 'ancla', turno ? 'Quitar de turno' : 'Poner en turno', turno ? ' activo' : '', b.id);
     }
-    h += '<button type="button" class="chip" data-acc="nueva-bahia">' + ic('mas') + 'Bahía</button>' +
-      '<button type="button" class="chip" data-acc="aplicar-todas">' + ic('capas') + 'Editar todas</button>' +
-      '<button type="button" class="chip" data-acc="pdf">' + ic('pdf') + 'PDF</button>' +
-      '<button type="button" class="chip" data-acc="editar-buque">' + ic('editar') + 'Buque</button></div>';
+    h += ib('nueva-bahia', 'mas', 'Agregar bahía') + ib('aplicar-todas', 'enchufe', 'Enchufe de todas las bahías') +
+      ib('pdf', 'pdf', 'Crear PDF') + ib('editar-buque', 'editar', 'Editar buque') + '</div>';
+    h += '<div class="leyenda"><span>Enchufe hacia</span>' + badgeEnc('proa') + badgeEnc('popa') + '</div>' +
+      '<p class="pista">Toca una bahía para editarla.</p>';
     h += '<label class="buscar">' + ic('buscar') + '<input id="filtro" type="search" autocomplete="off" placeholder="Buscar bahía (ejemplo: 25)" value="' + esc(ruta.filtro) + '"></label>';
     h += '<div id="lista">' + htmlLista(b) + '</div></section>';
     return h;
@@ -362,15 +368,13 @@
   function modalBuqueNuevo() {
     abrirModal('<h2>Nuevo buque</h2>' +
       '<div class="campo"><label for="f-nombre">Nombre del buque</label><input id="f-nombre" type="text" maxlength="60" autocomplete="off" placeholder="Ejemplo: Chiquita Grower"></div>' +
-      '<div class="campo"><div class="etq">Cantidad de bahías</div>' + stepper('f-n', 20, 1, 80) + '</div>' +
-      '<div class="dos"><div class="campo"><div class="etq">Cubierta (posiciones)</div>' + stepper('f-cub', 12, 1, 30) + '</div>' +
-      '<div class="campo"><div class="etq">Bodega (posiciones)</div>' + stepper('f-bod', 10, 0, 30) + '</div></div>' +
-      '<p class="ayuda" style="margin-top:6px;font-size:14px">La bodega suele tener 2 posiciones menos que la cubierta. Luego puedes cambiar cualquier bahía.</p>' +
-      '<div class="campo"><div class="etq">Enchufe refer en cubierta</div>' + seg('enc-cub', OPC_ENC, '', 'seg-enc') + '</div>' +
-      '<div class="campo"><div class="etq">Enchufe refer en bodega</div>' + seg('enc-bod', OPC_ENC, '', 'seg-enc') + '</div>' +
-      '<div class="campo"><div class="etq">Numeración de bahías</div>' + seg('numeracion', [['g', 'Grupos de 3'], ['1', '1, 2, 3…'], ['2', '1, 3, 5…']], 'g') +
-      '<p class="ayuda">Grupos de 3: 01-02-03, 05-06-07, 09-10-11… El par del medio es el principal.</p></div>' +
-      '<div class="campo"><div class="etq">¿Es el buque de este turno?</div>' + seg('turno', [['si', 'Sí'], ['no', 'No']], 'si') + '</div>' +
+      '<div class="campo"><div class="etq">¿Cuántas bahías tiene?</div>' + stepper('f-n', 20, 1, 80) + '</div>' +
+      '<div class="dos"><div class="campo"><div class="etq">Cubierta</div>' + stepper('f-cub', 12, 1, 30) + '</div>' +
+      '<div class="campo"><div class="etq">Bodega</div>' + stepper('f-bod', 10, 0, 30) + '</div></div>' +
+      '<p class="ayuda" style="margin-top:6px;font-size:14px">Cuántos contenedores caben de izquierda a derecha. Después puedes cambiar cada bahía.</p>' +
+      '<div class="campo"><div class="etq">Enchufe en cubierta</div>' + seg('enc-cub', OPC_ENC, '', 'seg-enc') + '</div>' +
+      '<div class="campo"><div class="etq">Enchufe en bodega</div>' + seg('enc-bod', OPC_ENC, '', 'seg-enc') + '</div>' +
+      '<div class="campo"><div class="etq">¿Lo están trabajando ahora?</div>' + seg('turno', [['si', 'Sí'], ['no', 'No']], 'si') + '</div>' +
       '<div class="botones"><button type="button" class="btn" data-acc="cerrar">Cancelar</button><button type="button" class="btn btn-prim" data-acc="guardar-buque-nuevo">Crear buque</button></div>');
     document.getElementById('f-cub').setAttribute('data-prev', '12');
   }
@@ -382,7 +386,7 @@
     var bod = leerNum('f-bod', 0, 30, Math.max(cub - 2, 0));
     var ec = valSeg('enc-cub');
     var eb = valSeg('enc-bod');
-    var modo = valSeg('numeracion');
+    var modo = 'g';
     var bahias = [];
     for (var i = 0; i < n; i++) {
       var v = modo === 'g' ? 2 + 4 * i : (modo === '2' ? 1 + 2 * i : 1 + i);
@@ -404,8 +408,8 @@
     abrirModal('<h2>Editar buque</h2>' +
       '<div class="campo"><label for="f-nombre">Nombre del buque</label><input id="f-nombre" type="text" maxlength="60" autocomplete="off" value="' + esc(b.nombre) + '"></div>' +
       '<div class="campo"><label for="f-notas">Nota (opcional)</label><input id="f-notas" type="text" maxlength="300" autocomplete="off" value="' + esc(b.notas) + '"></div>' +
-      '<div class="campo"><div class="etq">Mostrar cada bahía como grupo de 3 números</div>' + seg('grupo', [['si', 'Sí'], ['no', 'No']], b.grupo ? 'si' : 'no') +
-      '<p class="ayuda">Con grupos de 3, la bahía 06 se muestra como 05 · 06 · 07. Solo cambia cómo se ve: escribe en cada bahía su número par principal.</p></div>' +
+      '<div class="campo"><div class="etq">Bahías de 3 números</div>' + seg('grupo', [['si', 'Sí'], ['no', 'No']], b.grupo ? 'si' : 'no') +
+      '<p class="ayuda">Sí: la bahía 06 se ve como 05 · 06 · 07.</p></div>' +
       '<div class="botones"><button type="button" class="btn" data-acc="cerrar">Cancelar</button><button type="button" class="btn btn-prim" data-acc="guardar-buque-edit">Guardar</button></div>' +
       '<div class="botones"><button type="button" class="btn btn-peligro" data-acc="borrar-buque">Eliminar buque</button></div>');
   }
@@ -447,13 +451,13 @@
       x = { num: u ? siguienteNum(u.num, b.grupo) : (b.grupo ? '02' : '01'), anexo: false, ancho_cub: u ? u.ancho_cub : 12, ancho_bod: u ? u.ancho_bod : 10, enc_cub: u ? u.enc_cub : '', enc_bod: u ? u.enc_bod : '', nota: '' };
     }
     abrirModal('<h2>' + (nueva ? 'Nueva bahía' : 'Bahía ' + esc(miembros(x, b.grupo).join(' · '))) + '</h2>' +
-      '<div class="campo"><label for="f-num">' + (b.grupo ? 'Número principal (el par del medio)' : 'Número de bahía') + '</label><input id="f-num" type="text" maxlength="10" autocomplete="off" value="' + esc(x.num) + '">' +
-      (b.grupo ? '<p class="ayuda">Ejemplo: escribe 06 para la bahía 05 · 06 · 07.</p>' : '') + '</div>' +
-      '<div class="campo"><div class="etq">Tipo</div>' + seg('anexo', [['no', 'Bahía normal'], ['si', 'Anexo']], x.anexo ? 'si' : 'no') + '</div>' +
-      '<div class="campo"><div class="etq">Cubierta: posiciones de izquierda a derecha</div>' + stepper('f-cub', x.ancho_cub, 1, 30) + '</div>' +
-      '<div class="campo"><div class="etq">Enchufe refer en cubierta</div>' + seg('enc-cub', OPC_ENC, x.enc_cub, 'seg-enc') + '</div>' +
-      '<div class="campo"><div class="etq">Bodega: posiciones de izquierda a derecha</div>' + stepper('f-bod', x.ancho_bod, 0, 30) + '</div>' +
-      '<div class="campo"><div class="etq">Enchufe refer en bodega</div>' + seg('enc-bod', OPC_ENC, x.enc_bod, 'seg-enc') + '</div>' +
+      '<div class="campo"><label for="f-num">' + (b.grupo ? 'Número del medio (par)' : 'Número de bahía') + '</label><input id="f-num" type="text" maxlength="10" autocomplete="off" value="' + esc(x.num) + '">' +
+      (b.grupo ? '<p class="ayuda">Ejemplo: 06 para la bahía 05 · 06 · 07.</p>' : '') + '</div>' +
+      '<div class="campo"><div class="etq">Tipo</div>' + seg('anexo', [['no', 'Normal'], ['si', 'Anexo']], x.anexo ? 'si' : 'no') + '</div>' +
+      '<div class="campo"><div class="etq">Posiciones en cubierta</div>' + stepper('f-cub', x.ancho_cub, 1, 30) + '</div>' +
+      '<div class="campo"><div class="etq">Enchufe en cubierta</div>' + seg('enc-cub', OPC_ENC, x.enc_cub, 'seg-enc') + '</div>' +
+      '<div class="campo"><div class="etq">Posiciones en bodega</div>' + stepper('f-bod', x.ancho_bod, 0, 30) + '</div>' +
+      '<div class="campo"><div class="etq">Enchufe en bodega</div>' + seg('enc-bod', OPC_ENC, x.enc_bod, 'seg-enc') + '</div>' +
       '<div class="campo"><label for="f-nota">Nota (opcional)</label><input id="f-nota" type="text" maxlength="300" autocomplete="off" value="' + esc(x.nota) + '"></div>' +
       '<div class="botones"><button type="button" class="btn" data-acc="cerrar">Cancelar</button><button type="button" class="btn btn-prim" data-acc="guardar-bahia" data-id="' + (nueva ? '' : esc(x.id)) + '">Guardar</button></div>' +
       (nueva ? '' : '<div class="botones"><button type="button" class="btn btn-peligro" data-acc="borrar-bahia" data-id="' + esc(x.id) + '">Eliminar bahía</button></div>'));
@@ -506,9 +510,9 @@
     var b = buqueActual();
     if (!b) { return; }
     if (!b.bahias.length) { toast('Este buque no tiene bahías'); return; }
-    abrirModal('<h2>Editar todas las bahías</h2><p>Cambia el enchufe refer de las ' + b.bahias.length + ' bahías de una vez.</p>' +
-      '<div class="campo"><div class="etq">Enchufe refer en cubierta</div>' + seg('todas-cub', OPC_TODAS, 'keep', 'seg-enc') + '</div>' +
-      '<div class="campo"><div class="etq">Enchufe refer en bodega</div>' + seg('todas-bod', OPC_TODAS, 'keep', 'seg-enc') + '</div>' +
+    abrirModal('<h2>Enchufe de todas las bahías</h2><p>Cambia las ' + b.bahias.length + ' bahías de una vez. Deja «No cambiar» en lo que no quieras tocar.</p>' +
+      '<div class="campo"><div class="etq">Enchufe en cubierta</div>' + seg('todas-cub', OPC_TODAS, 'keep', 'seg-enc') + '</div>' +
+      '<div class="campo"><div class="etq">Enchufe en bodega</div>' + seg('todas-bod', OPC_TODAS, 'keep', 'seg-enc') + '</div>' +
       '<div class="botones"><button type="button" class="btn" data-acc="cerrar">Cancelar</button><button type="button" class="btn btn-prim" data-acc="guardar-aplicar">Aplicar</button></div>');
   }
   function guardarAplicar() {
