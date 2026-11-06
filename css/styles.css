@@ -350,3 +350,26 @@ h1, h2, p { margin: 0; }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* Barra de iconos y ayudas */
+.barra { display: flex; gap: 8px; margin: 2px 0 14px; }
+.ibtn {
+  flex: 1;
+  min-width: 0;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surf);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--txt);
+}
+.ibtn .ic { width: 25px; height: 25px; }
+.ibtn:active { background: var(--surf2); }
+.ibtn.activo { background: var(--proa-bg); border-color: var(--proa); color: var(--proa); }
+.leyenda { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; color: var(--mut); font-size: 14px; }
+.pista { margin-bottom: 12px; color: var(--mut); font-size: 14px; }
+.enc { white-space: nowrap; flex: none; }
+.f-cab { flex-wrap: nowrap; }
+.f-etq { white-space: nowrap; }
